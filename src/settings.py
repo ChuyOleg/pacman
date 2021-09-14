@@ -21,5 +21,5 @@ START_TEXT_SIZE = 16
 START_FONT = 'arial black'
 
 # player settings
-LIVES = 2
+LIVES = 1
 SPEED = 2
