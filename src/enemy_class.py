@@ -20,27 +20,27 @@ class Enemy:
     def update(self):
         self.pix_pos += self.direction * self.speed
 
+        self.grid_pos[0] = (self.pix_pos[0] - TOP_BOTTOM_BUFFER +
+                            self.app.cell_width // 2) // self.app.cell_width
+        self.grid_pos[1] = (self.pix_pos[1] - TOP_BOTTOM_BUFFER +
+                            self.app.cell_height // 2) // self.app.cell_height
+
         if self.time_to_move():
             self.change_direction_if_possible()
-
-        # Setting grid position in reference to pix position
-        self.grid_pos[0] = (self.pix_pos[0] - TOP_BOTTOM_BUFFER +
-                            self.app.cell_width // 2) // self.app.cell_width + 1
-        self.grid_pos[1] = (self.pix_pos[1] - TOP_BOTTOM_BUFFER +
-                            self.app.cell_height // 2) // self.app.cell_height + 1
 
     def draw(self):
         pygame.draw.circle(self.app.screen, self.colour,
                            (int(self.pix_pos.x), int(self.pix_pos.y)), self.radius)
 
     def time_to_move(self):
-        if int(self.pix_pos.x + TOP_BOTTOM_BUFFER // 2) % self.app.cell_width == 0:
+        if (self.pix_pos.x - TOP_BOTTOM_BUFFER // 2 - self.app.cell_width // 2) % self.app.cell_width == 0:
             if self.direction == vec(1, 0) or self.direction == vec(-1, 0) or self.direction == vec(0, 0):
                 return True
-        if int(self.pix_pos.y + TOP_BOTTOM_BUFFER // 2) % self.app.cell_height == 0:
+
+        if (self.pix_pos.y - TOP_BOTTOM_BUFFER // 2 - self.app.cell_height // 2) % self.app.cell_height == 0:
             if self.direction == vec(0, 1) or self.direction == vec(0, -1) or self.direction == vec(0, 0):
                 return True
-        return False
+
 
     def change_direction_if_possible(self):
         if ((self.grid_pos + self.direction) in self.app.walls) or (self.direction == vec(0, 0)):

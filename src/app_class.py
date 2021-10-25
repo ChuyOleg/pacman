@@ -1,6 +1,8 @@
 import sys
 from timeit import default_timer as timer
 
+import pygame
+
 from player_class import *
 from enemy_class import *
 from db.postgre_sql import load_data_to_db
@@ -76,6 +78,7 @@ class App:
                     self.coins.append(vec(xidx, yidx))
 
         self.p_pos = (vec(1, 1))
+        self.e_pos.append([COLS - 2, ROWS - 2])
 
     def update_time(self):
         self.current_time = (pygame.time.get_ticks() - self.start_time) // 1000
@@ -289,6 +292,8 @@ class App:
                     self.search_path("dfs")
                 elif event.key == pygame.K_u:
                     self.search_path("ucs")
+                elif event.key == pygame.K_a:
+                    self.player.a_star(self.player.grid_pos, self.enemies[0].grid_pos)
 
     def pause_draw(self):
         self.draw_text('PAUSE', self.screen, [
