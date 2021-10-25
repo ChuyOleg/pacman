@@ -4,6 +4,7 @@ from timeit import default_timer as timer
 from player_class import *
 from enemy_class import *
 from db.postgre_sql import load_data_to_db
+from maze_generation import carve_out_maze
 
 pygame.init()
 vec = pygame.math.Vector2
@@ -21,7 +22,7 @@ class App:
         self.cell_height = MAZE_HEIGHT // ROWS
         self.walls = []
         self.coins = []
-        self.game_field = [[0 for x in range(28)] for x in range(31)]
+        self.game_field = [[0 for x in range(COLS)] for x in range(ROWS)]
         self.enemies = []
         self.e_pos = []
         self.p_pos = None
@@ -65,31 +66,16 @@ class App:
         screen.blit(text, pos)
 
     def load(self):
-        self.background = pygame.image.load('maze.png')
-        self.background = pygame.transform.scale(self.background, (MAZE_WIDTH, MAZE_HEIGHT))
+        carve_out_maze(self.game_field)
 
-        # Opening walls file
-        # Creating walls list with co-ords of walls
-        # stored as  a vector
-        with open("walls.txt", 'r') as file:
-            for yidx, line in enumerate(file):
-                for xidx, char in enumerate(line):
-                    if char == "1":
-                        self.walls.append(vec(xidx, yidx))
-                        # pygame.draw.rect(self.background, GREY, (xidx * self.cell_width, yidx * self.cell_height,
-                        #                                           self.cell_width, self.cell_height))
-                    elif char == "C":
-                        self.coins.append(vec(xidx, yidx))
-                    elif char == "P":
-                        self.p_pos = [xidx, yidx]
-                    elif char == "E":
-                        self.e_pos.append([xidx, yidx])
-                    elif char == "B":
-                        pygame.draw.rect(self.background, BLACK, (xidx * self.cell_width, yidx * self.cell_height,
-                                                                  self.cell_width, self.cell_height))
+        for yidx, row in enumerate(self.game_field):
+            for xidx, cell in enumerate(row):
+                if cell == 1:
+                    self.walls.append(vec(xidx, yidx))
+                elif cell == 0:
+                    self.coins.append(vec(xidx, yidx))
 
-        for cell in self.walls:
-            self.game_field[int(cell.y)][int(cell.x)] = 1
+        self.p_pos = (vec(1, 1))
 
     def update_time(self):
         self.current_time = (pygame.time.get_ticks() - self.start_time) // 1000
@@ -110,11 +96,11 @@ class App:
             enemy.direction *= 0
 
         self.coins = []
-        with open("walls.txt", 'r') as file:
-            for yidx, line in enumerate(file):
-                for xidx, char in enumerate(line):
-                    if char == 'C':
-                        self.coins.append(vec(xidx, yidx))
+        for yidx, row in enumerate(self.game_field):
+            for xidx, cell in enumerate(row):
+                if cell == 0:
+                    self.coins.append(vec(xidx, yidx))
+
         self.state = "playing"
 
     def search_path(self, type):
@@ -154,7 +140,7 @@ class App:
 
         for cell_pos in path:
             pix_pos = self.player.get_pix_pos_from_grid_pos(cell_pos[0], cell_pos[1])
-            pygame.draw.rect(self.screen, GREY,
+            pygame.draw.rect(self.screen, GREEN,
                              (pix_pos[0], pix_pos[1], self.cell_width, self.cell_height))
 
         self.player.draw()
@@ -204,7 +190,9 @@ class App:
                     self.state = "pause"
 
     def playing_update(self):
+
         self.update_time()
+
         self.player.update()
         for enemy in self.enemies:
             enemy.update()
@@ -218,44 +206,48 @@ class App:
 
     def playing_draw(self):
         self.screen.fill(BLACK)
-        self.screen.blit(self.background, (TOP_BOTTOM_BUFFER // 2, TOP_BOTTOM_BUFFER // 2))
+        self.screen.blit(self.screen, (TOP_BOTTOM_BUFFER // 2, TOP_BOTTOM_BUFFER // 2))
         self.draw_coins()
-        # self.draw_grid()
+        for wall in self.walls:
+            xidx, yidx = wall
+            pygame.draw.rect(self.screen, GREY, (TOP_BOTTOM_BUFFER // 2 + xidx * self.cell_width, TOP_BOTTOM_BUFFER // 2 + yidx * self.cell_height,
+                                                 self.cell_width, self.cell_height))
+
         self.draw_text('CURRENT SCORE: {}'.format(self.player.current_score),
                        self.screen, [60, 0], 18, WHITE, START_FONT)
         self.draw_text('TIME: {}'.format(self.current_time),
                        self.screen, [WIDTH // 2 + 90, 0], 18, WHITE, START_FONT)
-        self.draw_text('P - PAUSE', self.screen, [
-            35, HEIGHT // 2 - 100], 14, WHITE, START_FONT)
-        self.draw_text('B - BFS', self.screen, [
-            35, HEIGHT // 2 - 60], 14, WHITE, START_FONT)
-        self.draw_text('D - DFS', self.screen, [
-            35, HEIGHT // 2 - 20], 14, WHITE, START_FONT)
-        self.draw_text('U - UCS', self.screen, [
-            35, HEIGHT // 2 + 20], 14, WHITE, START_FONT)
-        self.draw_text('SEARCH TIME', self.screen, [
-            WIDTH - 120, HEIGHT // 2 - 100], 14, WHITE, START_FONT)
-
-        if self.player.search_time['bfs'] != 0:
-            bfs_time = 'BFS - {}'.format(self.player.search_time['bfs'])
-        else:
-            bfs_time = 'BFS - '
-        self.draw_text(bfs_time, self.screen, [
-            WIDTH - 120, HEIGHT // 2 - 60], 14, WHITE, START_FONT)
-
-        if self.player.search_time['dfs'] != 0:
-            dfs_time = 'DFS - {}'.format(self.player.search_time['dfs'])
-        else:
-            dfs_time = 'DFS - '
-        self.draw_text(dfs_time, self.screen, [
-            WIDTH - 120, HEIGHT // 2 - 20], 14, WHITE, START_FONT)
-
-        if self.player.search_time['ucs'] != 0:
-            ucs_time = 'UCS - {}'.format(self.player.search_time['ucs'])
-        else:
-            ucs_time = 'UCS - '
-        self.draw_text(ucs_time, self.screen, [
-            WIDTH - 120, HEIGHT // 2 + 20], 14, WHITE, START_FONT)
+        # self.draw_text('P - PAUSE', self.screen, [
+        #     35, HEIGHT // 2 - 100], 14, WHITE, START_FONT)
+        # self.draw_text('B - BFS', self.screen, [
+        #     35, HEIGHT // 2 - 60], 14, WHITE, START_FONT)
+        # self.draw_text('D - DFS', self.screen, [
+        #     35, HEIGHT // 2 - 20], 14, WHITE, START_FONT)
+        # self.draw_text('U - UCS', self.screen, [
+        #     35, HEIGHT // 2 + 20], 14, WHITE, START_FONT)
+        # self.draw_text('SEARCH TIME', self.screen, [
+        #     WIDTH - 120, HEIGHT // 2 - 100], 14, WHITE, START_FONT)
+        #
+        # if self.player.search_time['bfs'] != 0:
+        #     bfs_time = 'BFS - {}'.format(self.player.search_time['bfs'])
+        # else:
+        #     bfs_time = 'BFS - '
+        # self.draw_text(bfs_time, self.screen, [
+        #     WIDTH - 120, HEIGHT // 2 - 60], 14, WHITE, START_FONT)
+        #
+        # if self.player.search_time['dfs'] != 0:
+        #     dfs_time = 'DFS - {}'.format(self.player.search_time['dfs'])
+        # else:
+        #     dfs_time = 'DFS - '
+        # self.draw_text(dfs_time, self.screen, [
+        #     WIDTH - 120, HEIGHT // 2 - 20], 14, WHITE, START_FONT)
+        #
+        # if self.player.search_time['ucs'] != 0:
+        #     ucs_time = 'UCS - {}'.format(self.player.search_time['ucs'])
+        # else:
+        #     ucs_time = 'UCS - '
+        # self.draw_text(ucs_time, self.screen, [
+        #     WIDTH - 120, HEIGHT // 2 + 20], 14, WHITE, START_FONT)
 
         self.player.draw()
         for enemy in self.enemies:
