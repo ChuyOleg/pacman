@@ -197,11 +197,12 @@ class Player:
         start_vertex = (start_vert_vec.x, start_vert_vec.y)
         end_vertex = (end_vert_vec.x, end_vert_vec.y)
 
-        pygame.display.update()
+        # self.calculate_h(price_matrix, table, "manhattan", end_vertex)
+        self.calculate_h(price_matrix, table, "greedy", end_vertex)
 
         heapq.heappush(opened_vertex, (1, start_vertex))
 
-        while (opened_vertex):
+        while opened_vertex:
 
             current_vertex = heapq.heappop(opened_vertex)[1]
 
@@ -247,6 +248,47 @@ class Player:
     def calculate_manhattan_distance(self, start_vert, end_vert):
         return abs(end_vert[0] - start_vert[0]) + abs(end_vert[1] - start_vert[1])
 
+
+    def greedy_heuristic(self, price_matrix, start_ver, end_vert):
+        current_vertex = start_ver
+        closed_vertex = []
+        vertex_queue = []
+        path = []
+        overall_price = 0
+
+        while (True):
+            best_move = None
+            min_price = 1000
+
+            for move in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                next_vertex = (current_vertex[0] + move[0], current_vertex[1] + move[1])
+
+                if next_vertex == end_vert:
+                    path.append(current_vertex)
+                    return overall_price
+
+                if next_vertex not in closed_vertex and next_vertex not in self.app.walls:
+                    move_price = price_matrix[int(current_vertex[1])][int(current_vertex[0])]
+
+                    if move_price < min_price:
+                        best_move = move
+                        min_price = move_price
+
+            if best_move is None:
+                closed_vertex.append(current_vertex)
+                if (len(path) == 0):
+                    return 100
+                previous_vertex = path.pop(len(path) - 1)
+                current_vertex = previous_vertex
+                continue
+
+            closed_vertex.append(current_vertex)
+            vertex_queue.append(current_vertex)
+            if current_vertex != start_ver:
+                path.append(current_vertex)
+                overall_price += min_price
+            current_vertex = (current_vertex[0] + best_move[0], current_vertex[1] + best_move[1])
+
     def define_price_matrix(self):
         return [[VOID_PRICE for x in range(COLS)] for x in range(ROWS)]
 
@@ -256,14 +298,19 @@ class Player:
                 if vec(xidx, yidx) in self.app.coins:
                     matrix[yidx][xidx] = 0
                     table[(xidx, yidx)] = {"g": None, "h": None, "f": None, "previous": None}
-                    table[(xidx, yidx)]["h"] = self.calculate_manhattan_distance((xidx, yidx),
-                                                                                 self.app.enemies[0].grid_pos)
                 elif vec(xidx, yidx) in self.app.walls:
                     matrix[yidx][xidx] = 1000
                 else:
                     table[(xidx, yidx)] = {"g": None, "h": None, "f": None, "previous": None}
-                    table[(xidx, yidx)]["h"] = self.calculate_manhattan_distance((xidx, yidx),
-                                                                                 self.app.enemies[0].grid_pos)
+
+    def calculate_h(self, price_matrix, table, heuristic_type, end_pos):
+        for yidx, row in enumerate(price_matrix):
+            for xidx, cell in enumerate(row):
+                if vec(xidx, yidx) not in self.app.walls:
+                    if heuristic_type == "manhattan":
+                        table[(xidx, yidx)]["h"] = self.calculate_manhattan_distance((xidx, yidx), end_pos)
+                    elif heuristic_type == "greedy":
+                        table[(xidx, yidx)]["h"] = self.greedy_heuristic(price_matrix, (xidx, yidx), end_pos)
 
     def calculate_g(self, table, price_matrix, vertex):
         if table[vertex]["previous"] is None:

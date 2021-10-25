@@ -26,4 +26,4 @@ START_FONT = 'arial black'
 # player settings
 LIVES = 1
 SPEED = 2
-VOID_PRICE = 5
+VOID_PRICE = 10
