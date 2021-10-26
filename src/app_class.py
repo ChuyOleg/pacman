@@ -294,6 +294,8 @@ class App:
                     self.search_path("ucs")
                 elif event.key == pygame.K_a:
                     self.player.a_star(self.player.grid_pos, self.enemies[0].grid_pos)
+                elif event.key == pygame.K_g:
+                    self.player.greedy_search(self.player.grid_pos, self.enemies[0].grid_pos)
 
     def pause_draw(self):
         self.draw_text('PAUSE', self.screen, [
