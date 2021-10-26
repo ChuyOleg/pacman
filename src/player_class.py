@@ -1,5 +1,4 @@
 from queue import PriorityQueue
-import heapq
 from time import sleep
 
 import pygame
@@ -28,10 +27,7 @@ class Player:
         if self.able_to_move:
             self.pix_pos += self.direction * self.speed
 
-        self.grid_pos[0] = (self.pix_pos[0] - TOP_BOTTOM_BUFFER // 2 -
-                            self.app.cell_width // 2) // self.app.cell_width
-        self.grid_pos[1] = (self.pix_pos[1] - TOP_BOTTOM_BUFFER // 2 -
-                            self.app.cell_height // 2) // self.app.cell_height
+        self.grid_pos = self.get_grid_pos_from_pix_pos(self.pix_pos)
 
         if self.time_to_move():
             self.change_direction_if_possible()
@@ -64,6 +60,10 @@ class Player:
     def move(self, direction):
         self.stored_direction = direction
 
+    def get_grid_pos_from_pix_pos(self, pix_pos):
+        return vec((pix_pos[0] - TOP_BOTTOM_BUFFER // 2 - self.app.cell_width // 2) // self.app.cell_width,
+                (pix_pos[1] - TOP_BOTTOM_BUFFER // 2 - self.app.cell_height // 2) // self.app.cell_height)
+
     def get_pix_pos(self):
         return vec((self.grid_pos[0] * self.app.cell_width) + TOP_BOTTOM_BUFFER // 2 + self.app.cell_width // 2,
                    (self.grid_pos[1] * self.app.cell_height) +
@@ -87,7 +87,6 @@ class Player:
                 return True
 
     def change_direction_if_possible(self):
-
         if self.stored_direction is not None and (self.grid_pos + self.stored_direction) not in self.app.walls:
             self.direction = self.stored_direction
             self.able_to_move = True
@@ -158,6 +157,7 @@ class Player:
 
     def ucs(self, start, target):
 
+        price_matrix = self.create_price_matrix()
         queue = PriorityQueue()
         queue.put((0, start))
         visited = []
@@ -173,8 +173,8 @@ class Player:
                 neighbours = [[0, -1], [1, 0], [0, 1], [-1, 0]]
                 for neighbour in neighbours:
                     next_cell = [int(neighbour[0] + current_node[0]), int(neighbour[1] + current_node[1])]
-                    if next_cell not in visited and self.app.game_field[int(next_cell[1])][int(next_cell[0])] != 1:
-                        queue.put((current[0] + 1, next_cell))
+                    if next_cell not in visited and next_cell not in self.app.walls:
+                        queue.put((current[0] + price_matrix[int(next_cell[1])][(int(next_cell[0]))], next_cell))
                         path.append({"Current": current_node, "Next": next_cell})
 
         real_path = [target]
@@ -186,22 +186,23 @@ class Player:
 
         return real_path
 
-    def a_star(self, start_vert_vec, end_vert_vec):
+    def a_star(self, start_vert_vec, end_vert_vec, heuristic_type):
         price_matrix = self.create_price_matrix()
         table = {}
 
         closed_vertex = []
-        opened_vertex = []
-        start_vertex = (start_vert_vec.x, start_vert_vec.y)
+        opened_vertex = PriorityQueue()
+
+        current_vertex = (start_vert_vec.x, start_vert_vec.y)
         end_vertex = (end_vert_vec.x, end_vert_vec.y)
 
-        self.fill_h_matrix(table, end_vertex)
+        self.fill_h_matrix(table, end_vert_vec, heuristic_type)
 
-        heapq.heappush(opened_vertex, (1, start_vertex))
+        opened_vertex.put((1, current_vertex))
 
-        while opened_vertex:
+        while opened_vertex and current_vertex != end_vertex:
 
-            current_vertex = heapq.heappop(opened_vertex)[1]
+            current_vertex = opened_vertex.get()[1]
 
             for move in ((1, 0), (-1, 0), (0, 1), (0, -1)):
                 next_vertex = (current_vertex[0] + move[0], current_vertex[1] + move[1])
@@ -212,7 +213,7 @@ class Player:
                         table[next_vertex]["previous"] = current_vertex
                         old_g = table[next_vertex]["g"]
                         new_g = self.calculate_g(table, price_matrix, next_vertex)
-                        if new_g < old_g:
+                        if new_g >= old_g:
                             table[next_vertex]["g"] = new_g
                             table[next_vertex]["f"] = new_g + table[next_vertex]["h"]
                         else:
@@ -222,39 +223,30 @@ class Player:
                         table[next_vertex]["g"] = self.calculate_g(table, price_matrix, next_vertex)
                         table[next_vertex]["f"] = table[next_vertex]["g"] + table[next_vertex]["h"]
 
-                    if (next_vertex == end_vertex):
-                        self.show_path(table, current_vertex)
-                        return
+                    opened_vertex.put((table[next_vertex]["f"], next_vertex))
 
-                    heapq.heappush(opened_vertex, ((table[next_vertex]["f"]), next_vertex))
+                    if next_vertex == end_vertex:
+                        break
 
             closed_vertex.append(current_vertex)
 
-        self.show_path(table, end_vertex)
+        real_path = [end_vertex]
+        while table[end_vertex]["previous"] is not None:
+            real_path.insert(0, table[end_vertex]["previous"])
+            end_vertex = table[end_vertex]["previous"]
 
-
-    def show_path(self, table, vertex):
-        if table[vertex]["previous"] is None:
-            return
-        else:
-            self.fill_cell(vertex, GREEN)
-            pygame.display.update()
-            sleep(0.1)
-
-            self.show_path(table, table[vertex]["previous"])
-
-    def calculate_manhattan_distance(self, start_vert, end_vert):
-        return abs(end_vert[0] - start_vert[0]) + abs(end_vert[1] - start_vert[1])
+        return real_path
 
     def greedy_search(self, start_ver, end_vert):
 
         price_matrix = self.create_price_matrix()
 
         current_vertex = start_ver
+        end_vertex = (end_vert.x, end_vert.y)
         closed_vertex = []
         path = []
 
-        while True:
+        while True and current_vertex != end_vertex:
 
             best_move = None
             min_price = 1000
@@ -263,12 +255,8 @@ class Player:
                 next_vertex = (current_vertex[0] + move[0], current_vertex[1] + move[1])
 
                 if next_vertex == end_vert:
-                    path.append(current_vertex)
-                    for vertex in path:
-                        self.fill_cell(vertex, RED)
-                        pygame.display.update()
-                        sleep(0.1)
-                    return
+                    best_move = move
+                    break
 
                 if next_vertex not in closed_vertex and next_vertex not in self.app.walls:
                     move_price = price_matrix[int(next_vertex[1])][int(next_vertex[0])]
@@ -283,18 +271,11 @@ class Player:
                 continue
 
             closed_vertex.append(current_vertex)
-            if current_vertex != start_ver:
-                path.append(current_vertex)
+            path.append(current_vertex)
             current_vertex = (current_vertex[0] + best_move[0], current_vertex[1] + best_move[1])
 
-    def fill_cell(self, vertex, color):
-        pygame.draw.rect(self.app.screen, color,
-                         (vertex[0] * self.app.cell_width + TOP_BOTTOM_BUFFER // 2,
-                          vertex[1] * self.app.cell_height + TOP_BOTTOM_BUFFER // 2,
-                          self.app.cell_width, self.app.cell_height), 0)
-
-    def define_price_matrix(self):
-        return [[VOID_PRICE for x in range(COLS)] for x in range(ROWS)]
+        path.append(end_vertex)
+        return path
 
     def create_price_matrix(self):
         price_matrix = [[VOID_PRICE for x in range(COLS)] for x in range(ROWS)]
@@ -306,12 +287,65 @@ class Player:
                     price_matrix[yidx][xidx] = 1000
         return price_matrix
 
-    def fill_h_matrix(self, table, end_pos):
+    def fill_h_matrix(self, table, end_pos, heuristic_type):
         for yidx, row in enumerate(self.app.game_field):
             for xidx, cell in enumerate(row):
                 if (vec(xidx, yidx)) not in self.app.walls:
                     table[(xidx, yidx)] = {"g": None, "h": None, "f": None, "previous": None}
-                    table[(xidx, yidx)]["h"] = self.calculate_manhattan_distance((xidx, yidx), end_pos)
+                    if heuristic_type == "manhattan":
+                        table[(xidx, yidx)]["h"] = self.calculate_manhattan_distance((xidx, yidx), end_pos)
+                    elif heuristic_type == "bfs":
+                        table[(xidx, yidx)]["h"] = self.calculate_bfs_distance(vec(xidx, yidx), end_pos)
+                    else:
+                        print("Incorrect name of heuristic function")
+                        exit()
+
+    def follow_path(self, path):
+        self.app.draw_path(path, WHITE)
+        pygame.display.update()
+        sleep(2)
+
+        for cell in path:
+            move = (vec(cell) - self.grid_pos)
+
+            if (move == vec(0, 0)): continue
+
+            self.stored_direction = None
+            self.direction = move
+
+            for i in range(0, int(self.app.cell_width / SPEED)):
+                if self.able_to_move:
+                    self.pix_pos += self.direction * self.speed
+
+                self.grid_pos = self.get_grid_pos_from_pix_pos(self.pix_pos)
+
+                if self.on_coin():
+                    self.eat_coin()
+
+                if self.time_to_move():
+                    break
+
+            self.draw()
+            self.app.playing_draw()
+            self.app.draw_pressed_cells()
+            pygame.display.update()
+            sleep(0.2)
+
+
+    def use_a_star_for_4_points(self):
+        for cell in self.app.pressed_cells:
+            path = self.a_star(self.grid_pos, vec(cell), "manhattan")
+            self.follow_path(path)
+        self.app.pressed_cells = []
+        self.direction = vec(0, 0)
+
+
+    def calculate_manhattan_distance(self, start_vert, end_vert):
+        return abs(end_vert[0] - start_vert[0]) + abs(end_vert[1] - start_vert[1])
+
+    def calculate_bfs_distance(self, start_vert, end_vert):
+        path = self.bfs(start_vert, end_vert)
+        return len(path)
 
     def calculate_g(self, table, price_matrix, vertex):
         if table[vertex]["previous"] is None:

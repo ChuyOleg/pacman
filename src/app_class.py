@@ -1,7 +1,7 @@
 import sys
 from timeit import default_timer as timer
 
-import pygame
+import pygame.draw
 
 from player_class import *
 from enemy_class import *
@@ -32,6 +32,7 @@ class App:
         self.load()
         self.player = Player(self, vec(self.p_pos))
         self.make_enemies()
+        self.pressed_cells = []
 
     def run(self):
         while self.running:
@@ -58,6 +59,20 @@ class App:
 
     ############################ HELPER FUNCTIONS ##################################
 
+    def draw_path(self, path, color):
+        for cell_pos in path:
+            pix_pos = self.player.get_pix_pos_from_grid_pos(cell_pos[0], cell_pos[1])
+            pygame.draw.rect(self.screen, color,
+                             (pix_pos[0], pix_pos[1], self.cell_width, self.cell_height))
+
+    def draw_pressed_cells(self):
+        for cell in self.pressed_cells:
+            cell_pix = self.player.get_pix_pos_from_grid_pos(cell[0], cell[1])
+            pygame.draw.rect(self.screen, RED, (cell_pix[0], cell_pix[1], self.cell_width, self.cell_height), 0)
+
+    def pos_is_in_field(self, pos):
+        return pos[0] >= 0 and pos[0] < COLS and pos[1] >= 0 and pos[1] < ROWS
+
     def draw_text(self, words, screen, pos, size, colour, font_name, centered=False):
         font = pygame.font.SysFont(font_name, size)
         text = font.render(words, False, colour)
@@ -77,8 +92,10 @@ class App:
                 elif cell == 0:
                     self.coins.append(vec(xidx, yidx))
 
+        self.coins.remove(vec(1, 1))
         self.p_pos = (vec(1, 1))
-        self.e_pos.append([COLS - 2, ROWS - 2])
+
+        self.e_pos.append([self.coins[len(self.coins) - 1].x, self.coins[len(self.coins) - 1].y])
 
     def update_time(self):
         self.current_time = (pygame.time.get_ticks() - self.start_time) // 1000
@@ -140,11 +157,14 @@ class App:
                 35, HEIGHT // 2 + 20], 14, GREEN, START_FONT)
             self.draw_text('UCS - {}'.format(search_time), self.screen, [
             WIDTH - 120, HEIGHT // 2 + 20], 14, GREEN, START_FONT)
+        elif type == "a_star manhattan":
+            path = self.player.a_star(self.player.grid_pos, self.enemies[0].grid_pos, "manhattan")
+        elif type == "a_star bfs":
+            path = self.player.a_star(self.player.grid_pos, self.enemies[0].grid_pos, "bfs")
+        elif type == "greedy":
+            path = self.player.greedy_search(self.player.grid_pos, self.enemies[0].grid_pos)
 
-        for cell_pos in path:
-            pix_pos = self.player.get_pix_pos_from_grid_pos(cell_pos[0], cell_pos[1])
-            pygame.draw.rect(self.screen, GREEN,
-                             (pix_pos[0], pix_pos[1], self.cell_width, self.cell_height))
+        self.draw_path(path, GREEN)
 
         self.player.draw()
         for enemy in self.enemies:
@@ -293,9 +313,25 @@ class App:
                 elif event.key == pygame.K_u:
                     self.search_path("ucs")
                 elif event.key == pygame.K_a:
-                    self.player.a_star(self.player.grid_pos, self.enemies[0].grid_pos)
+                    self.search_path("a_star manhattan")
+                elif event.key == pygame.K_s:
+                    self.search_path("a_star bfs")
                 elif event.key == pygame.K_g:
-                    self.player.greedy_search(self.player.grid_pos, self.enemies[0].grid_pos)
+                    self.search_path("greedy")
+                elif event.key == pygame.K_f:
+                    self.player.use_a_star_for_4_points()
+            if event.type == pygame.MOUSEBUTTONUP:
+                pos = pygame.mouse.get_pos()
+                grid_pos = ((pos[0] - TOP_BOTTOM_BUFFER // 2) // self.cell_width, (pos[1] - TOP_BOTTOM_BUFFER // 2) // self.cell_height)
+
+                if grid_pos not in self.pressed_cells and grid_pos not in self.walls and self.pos_is_in_field(grid_pos):
+                    self.pressed_cells.append(grid_pos)
+
+                if len(self.pressed_cells) > 4:
+                    self.pressed_cells.pop(0)
+
+                self.playing_draw()
+                self.draw_pressed_cells()
 
     def pause_draw(self):
         self.draw_text('PAUSE', self.screen, [
