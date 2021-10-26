@@ -53,7 +53,7 @@ class Player:
                     return True
         return False
 
-    def eat_coin(self):
+    def  eat_coin(self):
         self.app.coins.remove(self.grid_pos)
         self.current_score += 1
 
@@ -69,13 +69,14 @@ class Player:
                    (self.grid_pos[1] * self.app.cell_height) +
                    TOP_BOTTOM_BUFFER // 2 + self.app.cell_height // 2)
 
-    def get_pix_pos_from_grid_pos(self, x, y):
+    def get_pix_pos_from_grid_pos(self, grid_cell):
+        return vec((grid_cell[0] * self.app.cell_width) + TOP_BOTTOM_BUFFER // 2 + self.app.cell_width // 2,
+                   (grid_cell[1] * self.app.cell_height) +
+                   TOP_BOTTOM_BUFFER // 2 + self.app.cell_height // 2)
+
+    def get_pix_pos_from_grid_pos_for_rect(self, x, y):
         return vec(int((x * self.app.cell_width) + TOP_BOTTOM_BUFFER // 2),
                    int((y * self.app.cell_height) + TOP_BOTTOM_BUFFER // 2))
-
-    def get_pix_pis_on_grid(self, x, y):
-        return vec(int(self.pix_pos.x - TOP_BOTTOM_BUFFER // 2 - self.app.cell_width // 2),
-                   self.pix_pos.y - TOP_BOTTOM_BUFFER // 2 - self.app.cell_height // 2)
 
     def time_to_move(self):
         if (self.pix_pos.x - TOP_BOTTOM_BUFFER // 2 - self.app.cell_width // 2) % self.app.cell_width == 0:
@@ -303,12 +304,14 @@ class Player:
     def follow_path(self, path):
         self.app.draw_path(path, WHITE)
         pygame.display.update()
-        sleep(2)
+        sleep(0.5)
 
         for cell in path:
             move = (vec(cell) - self.grid_pos)
 
-            if (move == vec(0, 0)): continue
+            if (move == vec(0, 0)):
+                self.pix_pos = self.get_pix_pos_from_grid_pos(self.grid_pos)
+                continue
 
             self.stored_direction = None
             self.direction = move
@@ -331,7 +334,6 @@ class Player:
             pygame.display.update()
             sleep(0.2)
 
-
     def use_a_star_for_4_points(self):
         for cell in self.app.pressed_cells:
             path = self.a_star(self.grid_pos, vec(cell), "manhattan")
@@ -339,6 +341,24 @@ class Player:
         self.app.pressed_cells = []
         self.direction = vec(0, 0)
 
+    def use_a_star_for_all_coins(self):
+        while len(self.app.coins) > 0:
+            nearest_coin = None
+
+            radius = 1
+            while nearest_coin == None:
+                for x in range(-radius, radius + 1):
+                    for y in range(-radius, radius + 1):
+                        move = vec(x, y)
+                        if (self.grid_pos + move) in self.app.coins:
+                            nearest_coin = self.grid_pos + move
+                            break
+                radius += 1
+
+            path = self.a_star(self.grid_pos, vec(nearest_coin), "manhattan")
+            self.follow_path(path)
+
+        self.direction = vec(0, 0)
 
     def calculate_manhattan_distance(self, start_vert, end_vert):
         return abs(end_vert[0] - start_vert[0]) + abs(end_vert[1] - start_vert[1])

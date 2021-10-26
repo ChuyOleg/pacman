@@ -61,13 +61,13 @@ class App:
 
     def draw_path(self, path, color):
         for cell_pos in path:
-            pix_pos = self.player.get_pix_pos_from_grid_pos(cell_pos[0], cell_pos[1])
+            pix_pos = self.player.get_pix_pos_from_grid_pos_for_rect(cell_pos[0], cell_pos[1])
             pygame.draw.rect(self.screen, color,
                              (pix_pos[0], pix_pos[1], self.cell_width, self.cell_height))
 
     def draw_pressed_cells(self):
         for cell in self.pressed_cells:
-            cell_pix = self.player.get_pix_pos_from_grid_pos(cell[0], cell[1])
+            cell_pix = self.player.get_pix_pos_from_grid_pos_for_rect(cell[0], cell[1])
             pygame.draw.rect(self.screen, RED, (cell_pix[0], cell_pix[1], self.cell_width, self.cell_height), 0)
 
     def pos_is_in_field(self, pos):
@@ -133,30 +133,30 @@ class App:
             end_time = timer()
             search_time = (end_time - start_time) * 1000
             self.player.search_time["bfs"] = search_time
-            self.draw_text('B - BFS', self.screen, [
-                35, HEIGHT // 2 - 60], 14, GREEN, START_FONT)
-            self.draw_text('BFS - {}'.format(search_time), self.screen, [
-                WIDTH - 120, HEIGHT // 2 - 60], 14, GREEN, START_FONT)
+            # self.draw_text('B - BFS', self.screen, [
+            #     35, HEIGHT // 2 - 60], 14, GREEN, START_FONT)
+            # self.draw_text('BFS - {}'.format(search_time), self.screen, [
+            #     WIDTH - 120, HEIGHT // 2 - 60], 14, GREEN, START_FONT)
         elif type == "dfs":
             start_time = timer()
             path = self.player.dfs(self.player.grid_pos, self.enemies[0].grid_pos)
             end_time = timer()
             search_time = (end_time - start_time) * 1000
             self.player.search_time["dfs"] = search_time
-            self.draw_text('D - DFS', self.screen, [
-                35, HEIGHT // 2 - 20], 14, GREEN, START_FONT)
-            self.draw_text('DFS - {}'.format(search_time), self.screen, [
-                WIDTH - 120, HEIGHT // 2 - 20], 14, GREEN, START_FONT)
+            # self.draw_text('D - DFS', self.screen, [
+            #     35, HEIGHT // 2 - 20], 14, GREEN, START_FONT)
+            # self.draw_text('DFS - {}'.format(search_time), self.screen, [
+            #     WIDTH - 120, HEIGHT // 2 - 20], 14, GREEN, START_FONT)
         elif type == "ucs":
             start_time = timer()
             path = self.player.ucs(self.player.grid_pos, self.enemies[0].grid_pos)
             end_time = timer()
             search_time = (end_time - start_time) * 1000
             self.player.search_time["ucs"] = search_time
-            self.draw_text('U - UCS', self.screen, [
-                35, HEIGHT // 2 + 20], 14, GREEN, START_FONT)
-            self.draw_text('UCS - {}'.format(search_time), self.screen, [
-            WIDTH - 120, HEIGHT // 2 + 20], 14, GREEN, START_FONT)
+            # self.draw_text('U - UCS', self.screen, [
+            #     35, HEIGHT // 2 + 20], 14, GREEN, START_FONT)
+            # self.draw_text('UCS - {}'.format(search_time), self.screen, [
+            # WIDTH - 120, HEIGHT // 2 + 20], 14, GREEN, START_FONT)
         elif type == "a_star manhattan":
             path = self.player.a_star(self.player.grid_pos, self.enemies[0].grid_pos, "manhattan")
         elif type == "a_star bfs":
@@ -318,6 +318,8 @@ class App:
                     self.search_path("a_star bfs")
                 elif event.key == pygame.K_g:
                     self.search_path("greedy")
+                elif event.key == pygame.K_n:
+                    self.player.use_a_star_for_all_coins()
                 elif event.key == pygame.K_f:
                     self.player.use_a_star_for_4_points()
             if event.type == pygame.MOUSEBUTTONUP:
