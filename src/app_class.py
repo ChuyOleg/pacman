@@ -1,12 +1,10 @@
-import sys
-from timeit import default_timer as timer
-
 import pygame.draw
 
 from player_class import *
 from enemy_class import *
 from db.postgre_sql import load_data_to_db
 from maze_generation import carve_out_maze
+from maze_generation import generate_stable_maze
 
 pygame.init()
 vec = pygame.math.Vector2
@@ -33,6 +31,7 @@ class App:
         self.player = Player(self, vec(self.p_pos))
         self.make_enemies()
         self.pressed_cells = []
+        self.minimax = Minimax(self.player, self.enemies, 6, "alpha-beta")
 
     def run(self):
         while self.running:
@@ -71,7 +70,7 @@ class App:
             pygame.draw.rect(self.screen, RED, (cell_pix[0], cell_pix[1], self.cell_width, self.cell_height), 0)
 
     def pos_is_in_field(self, pos):
-        return pos[0] >= 0 and pos[0] < COLS and pos[1] >= 0 and pos[1] < ROWS
+        return 0 <= pos[0] < COLS and 0 <= pos[1] < ROWS
 
     def draw_text(self, words, screen, pos, size, colour, font_name, centered=False):
         font = pygame.font.SysFont(font_name, size)
@@ -83,7 +82,11 @@ class App:
         screen.blit(text, pos)
 
     def load(self):
-        carve_out_maze(self.game_field)
+        # random
+        # carve_out_maze(self.game_field)
+
+        # stable
+        self.game_field = generate_stable_maze()
 
         for yidx, row in enumerate(self.game_field):
             for xidx, cell in enumerate(row):
@@ -95,14 +98,29 @@ class App:
         self.coins.remove(vec(1, 1))
         self.p_pos = (vec(1, 1))
 
-        self.e_pos.append([self.coins[len(self.coins) - 1].x, self.coins[len(self.coins) - 1].y])
+        self.add_enemies(2)
+
+    def add_enemies(self, count):
+        for enemy_num in range(0, count):
+            self.e_pos.append(
+                [self.coins[len(self.coins) - (enemy_num + 1)].x, self.coins[len(self.coins) - (enemy_num + 1)].y])
 
     def update_time(self):
         self.current_time = (pygame.time.get_ticks() - self.start_time) // 1000
 
     def make_enemies(self):
         for idx, pos in enumerate(self.e_pos):
-            self.enemies.append(Enemy(self, vec(pos), idx))
+            enemy_type = "default"
+            if idx == 1:
+                enemy_type = "bfs"
+            self.enemies.append(Enemy(self, vec(pos), enemy_type))
+
+    def check_death(self):
+        for enemy in self.enemies:
+            diff = [enemy.pix_pos.x - self.player.pix_pos.x, enemy.pix_pos.y - self.player.pix_pos.y]
+            if abs(diff[0]) < (self.cell_width // 4) and abs(diff[1]) < (self.cell_width // 4):
+                return True
+        return False
 
     def reset(self):
         self.player.lives = LIVES
@@ -110,6 +128,7 @@ class App:
         self.player.grid_pos = vec(self.player.starting_pos)
         self.player.pix_pos = self.player.get_pix_pos()
         self.player.direction *= 0
+        self.start_time = pygame.time.get_ticks()
         for enemy in self.enemies:
             enemy.grid_pos = vec(enemy.starting_pos)
             enemy.pix_pos = enemy.get_pix_pos()
@@ -122,54 +141,6 @@ class App:
                     self.coins.append(vec(xidx, yidx))
 
         self.state = "playing"
-
-    def search_path(self, type):
-        global start_time, end_time, path
-        self.player.search_time[type] = 0
-        self.playing_draw()
-        if type == "bfs":
-            start_time = timer()
-            path = self.player.bfs(self.player.grid_pos, self.enemies[0].grid_pos)
-            end_time = timer()
-            search_time = (end_time - start_time) * 1000
-            self.player.search_time["bfs"] = search_time
-            # self.draw_text('B - BFS', self.screen, [
-            #     35, HEIGHT // 2 - 60], 14, GREEN, START_FONT)
-            # self.draw_text('BFS - {}'.format(search_time), self.screen, [
-            #     WIDTH - 120, HEIGHT // 2 - 60], 14, GREEN, START_FONT)
-        elif type == "dfs":
-            start_time = timer()
-            path = self.player.dfs(self.player.grid_pos, self.enemies[0].grid_pos)
-            end_time = timer()
-            search_time = (end_time - start_time) * 1000
-            self.player.search_time["dfs"] = search_time
-            # self.draw_text('D - DFS', self.screen, [
-            #     35, HEIGHT // 2 - 20], 14, GREEN, START_FONT)
-            # self.draw_text('DFS - {}'.format(search_time), self.screen, [
-            #     WIDTH - 120, HEIGHT // 2 - 20], 14, GREEN, START_FONT)
-        elif type == "ucs":
-            start_time = timer()
-            path = self.player.ucs(self.player.grid_pos, self.enemies[0].grid_pos)
-            end_time = timer()
-            search_time = (end_time - start_time) * 1000
-            self.player.search_time["ucs"] = search_time
-            # self.draw_text('U - UCS', self.screen, [
-            #     35, HEIGHT // 2 + 20], 14, GREEN, START_FONT)
-            # self.draw_text('UCS - {}'.format(search_time), self.screen, [
-            # WIDTH - 120, HEIGHT // 2 + 20], 14, GREEN, START_FONT)
-        elif type == "a_star manhattan":
-            path = self.player.a_star(self.player.grid_pos, self.enemies[0].grid_pos, "manhattan")
-        elif type == "a_star bfs":
-            path = self.player.a_star(self.player.grid_pos, self.enemies[0].grid_pos, "bfs")
-        elif type == "greedy":
-            path = self.player.greedy_search(self.player.grid_pos, self.enemies[0].grid_pos)
-
-        self.draw_path(path, GREEN)
-
-        self.player.draw()
-        for enemy in self.enemies:
-            enemy.draw()
-
 
     ########################### INTRO FUNCTIONS ####################################
 
@@ -216,13 +187,17 @@ class App:
 
         self.update_time()
 
-        self.player.update()
+        if self.player.time_to_move():
+            best_move = self.minimax.run()
+            self.player.move(best_move)
+            self.player.direction = best_move
+
+        self.player.update("yes")
         for enemy in self.enemies:
             enemy.update()
 
-        for enemy in self.enemies:
-            if enemy.grid_pos == self.player.grid_pos:
-                self.remove_life()
+        if self.check_death():
+            self.remove_life()
 
         if len(self.coins) == 0:
             self.state = "game over"
@@ -233,44 +208,14 @@ class App:
         self.draw_coins()
         for wall in self.walls:
             xidx, yidx = wall
-            pygame.draw.rect(self.screen, GREY, (TOP_BOTTOM_BUFFER // 2 + xidx * self.cell_width, TOP_BOTTOM_BUFFER // 2 + yidx * self.cell_height,
-                                                 self.cell_width, self.cell_height))
+            pygame.draw.rect(self.screen, GREY, (
+            TOP_BOTTOM_BUFFER // 2 + xidx * self.cell_width, TOP_BOTTOM_BUFFER // 2 + yidx * self.cell_height,
+            self.cell_width, self.cell_height))
 
         self.draw_text('CURRENT SCORE: {}'.format(self.player.current_score),
                        self.screen, [60, 0], 18, WHITE, START_FONT)
         self.draw_text('TIME: {}'.format(self.current_time),
                        self.screen, [WIDTH // 2 + 90, 0], 18, WHITE, START_FONT)
-        # self.draw_text('P - PAUSE', self.screen, [
-        #     35, HEIGHT // 2 - 100], 14, WHITE, START_FONT)
-        # self.draw_text('B - BFS', self.screen, [
-        #     35, HEIGHT // 2 - 60], 14, WHITE, START_FONT)
-        # self.draw_text('D - DFS', self.screen, [
-        #     35, HEIGHT // 2 - 20], 14, WHITE, START_FONT)
-        # self.draw_text('U - UCS', self.screen, [
-        #     35, HEIGHT // 2 + 20], 14, WHITE, START_FONT)
-        # self.draw_text('SEARCH TIME', self.screen, [
-        #     WIDTH - 120, HEIGHT // 2 - 100], 14, WHITE, START_FONT)
-        #
-        # if self.player.search_time['bfs'] != 0:
-        #     bfs_time = 'BFS - {}'.format(self.player.search_time['bfs'])
-        # else:
-        #     bfs_time = 'BFS - '
-        # self.draw_text(bfs_time, self.screen, [
-        #     WIDTH - 120, HEIGHT // 2 - 60], 14, WHITE, START_FONT)
-        #
-        # if self.player.search_time['dfs'] != 0:
-        #     dfs_time = 'DFS - {}'.format(self.player.search_time['dfs'])
-        # else:
-        #     dfs_time = 'DFS - '
-        # self.draw_text(dfs_time, self.screen, [
-        #     WIDTH - 120, HEIGHT // 2 - 20], 14, WHITE, START_FONT)
-        #
-        # if self.player.search_time['ucs'] != 0:
-        #     ucs_time = 'UCS - {}'.format(self.player.search_time['ucs'])
-        # else:
-        #     ucs_time = 'UCS - '
-        # self.draw_text(ucs_time, self.screen, [
-        #     WIDTH - 120, HEIGHT // 2 + 20], 14, WHITE, START_FONT)
 
         self.player.draw()
         for enemy in self.enemies:
@@ -304,36 +249,7 @@ class App:
                 self.running = False
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE:
-                    self.player.search_time = {"bfs": 0, "dfs": 0, "ucs": 0}
                     self.state = 'playing'
-                elif event.key == pygame.K_b:
-                    self.search_path("bfs")
-                elif event.key == pygame.K_d:
-                    self.search_path("dfs")
-                elif event.key == pygame.K_u:
-                    self.search_path("ucs")
-                elif event.key == pygame.K_a:
-                    self.search_path("a_star manhattan")
-                elif event.key == pygame.K_s:
-                    self.search_path("a_star bfs")
-                elif event.key == pygame.K_g:
-                    self.search_path("greedy")
-                elif event.key == pygame.K_n:
-                    self.player.use_a_star_for_all_coins()
-                elif event.key == pygame.K_f:
-                    self.player.use_a_star_for_4_points()
-            if event.type == pygame.MOUSEBUTTONUP:
-                pos = pygame.mouse.get_pos()
-                grid_pos = ((pos[0] - TOP_BOTTOM_BUFFER // 2) // self.cell_width, (pos[1] - TOP_BOTTOM_BUFFER // 2) // self.cell_height)
-
-                if grid_pos not in self.pressed_cells and grid_pos not in self.walls and self.pos_is_in_field(grid_pos):
-                    self.pressed_cells.append(grid_pos)
-
-                if len(self.pressed_cells) > 4:
-                    self.pressed_cells.pop(0)
-
-                self.playing_draw()
-                self.draw_pressed_cells()
 
     def pause_draw(self):
         self.draw_text('PAUSE', self.screen, [

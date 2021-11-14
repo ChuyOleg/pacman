@@ -6,13 +6,13 @@ vec = pygame.math.Vector2
 
 
 class Enemy:
-    def __init__(self, app, pos, number):
+    def __init__(self, app, pos, enemy_type):
         self.app = app
         self.grid_pos = pos
         self.starting_pos = [pos.x, pos.y]
         self.pix_pos = self.get_pix_pos()
         self.radius = int(self.app.cell_width // 2.3)
-        self.number = number
+        self.enemy_type = enemy_type
         self.colour = (255, 5, 5)
         self.direction = vec(0, 0)
         self.speed = 2
@@ -30,7 +30,7 @@ class Enemy:
 
     def draw(self):
         pygame.draw.circle(self.app.screen, self.colour,
-                           (int(self.pix_pos.x), int(self.pix_pos.y)), self.radius)
+                           (int(self.pix_pos.x), int(self.pix_pos.y)), self.radius - 10)
 
     def time_to_move(self):
         if (self.pix_pos.x - TOP_BOTTOM_BUFFER // 2 - self.app.cell_width // 2) % self.app.cell_width == 0:
@@ -44,12 +44,13 @@ class Enemy:
 
     def change_direction_if_possible(self):
         if ((self.grid_pos + self.direction) in self.app.walls) or (self.direction == vec(0, 0)):
-            self.direction = self.get_random_direction()
+            self.direction = self.get_direction()
 
         if self.direction in [vec(1, 0), vec(-1, 0)]:
             if self.grid_pos + vec(0, 1) not in self.app.walls or self.grid_pos + vec(0, -1) not in self.app.walls:
                 while True:
-                    new_direction = self.get_random_direction()
+                    self.get_bfs_direction()
+                    new_direction = self.get_direction()
                     if new_direction != vec(self.direction.x * -1, self.direction.y):
                         self.direction = new_direction
                         return
@@ -57,10 +58,24 @@ class Enemy:
         if self.direction in [vec(0, 1), vec(0, -1)]:
             if self.grid_pos + vec(1, 0) not in self.app.walls or self.grid_pos + vec(-1, 0) not in self.app.walls:
                 while True:
-                    new_direction = self.get_random_direction()
+                    new_direction = self.get_direction()
                     if new_direction != vec(self.direction.x, self.direction.y * -1):
                         self.direction = new_direction
                         return
+
+    def get_direction(self):
+        if self.enemy_type == "bfs":
+            return self.get_bfs_direction()
+        else:
+            return self.get_random_direction()
+
+    def get_bfs_direction(self):
+        bfs_path = self.app.player.bfs(self.grid_pos, self.app.player.grid_pos)
+        if len(bfs_path) > 1:
+            bfs_direction = bfs_path[1] - self.grid_pos
+        else:
+            bfs_direction = bfs_path[0] - self.grid_pos
+        return vec(bfs_direction[0], bfs_direction[1])
 
     def get_random_direction(self):
         while True:

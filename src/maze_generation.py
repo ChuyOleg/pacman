@@ -1,4 +1,6 @@
 import random
+import sys
+
 from settings import *
 
 visited = []
@@ -36,6 +38,23 @@ def random_appending(cell, direction):
     if answer == "append":
         cell.append(direction)
 
+
+def generate_stable_maze():
+    if ROWS != 10:
+        print("Error. You generate stable maze for 10 rows but in settings is written: ROWS = ", ROWS)
+        sys.exit()
+    return [
+        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        [1, 0, 1, 0, 1, 0, 1, 1, 0, 1],
+        [1, 0, 1, 0, 0, 0, 1, 1, 0, 1],
+        [1, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+        [1, 0, 1, 1, 1, 1, 0, 1, 0, 1],
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        [1, 0, 1, 0, 1, 1, 0, 1, 0, 1],
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    ]
 
 def carve_out_maze(real_grid):
     x, y = 2, 2
